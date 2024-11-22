@@ -1,0 +1,275 @@
+import tkinter as tk
+from tkinter import ttk
+from tkinter import messagebox
+import psycopg2
+
+class Datsan:
+    def __init__(self, customer_name, field_number, amount):
+        self.customer_name = customer_name
+        self.field_number = field_number
+        self.amount = amount
+
+class Quanlysanbong:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Quản Lý Sân Bóng")
+
+        # Khởi tạo thông tin kết nối cơ sở dữ liệu mặc định
+        self.db_name = 'quan_ly_san_bong'
+        self.user = 'postgres'
+        self.password = '29042004'
+        self.host = 'localhost'
+        self.port = '5432'
+
+        # Biến kết nối và con trỏ
+        self.db_connection = None
+        self.cursor = None
+
+        self.setup_ui()
+
+    def connect_db(self):
+        try:
+            self.db_connection = psycopg2.connect(
+                dbname=self.db_name,
+                user=self.user,
+                password=self.password,
+                host=self.host,
+                port=self.port
+            )
+            self.cursor = self.db_connection.cursor()
+            messagebox.showinfo("Success", "Kết nối tới cơ sở dữ liệu thành công!")
+            self.update_statistics()  # Cập nhật thống kê ngay sau khi kết nối thành công
+        except Exception as e:
+            messagebox.showerror("Error", f"Lỗi kết nối cơ sở dữ liệu: {e}")
+
+    def change_db_connection(self):
+        self.db_name = self.entry_db_name.get()
+        self.user = self.entry_user.get()
+        self.password = self.entry_password.get()
+        self.host = self.entry_host.get()
+        self.port = self.entry_port.get()
+
+        # Thực hiện kết nối cơ sở dữ liệu với thông tin mới
+        self.connect_db()
+
+    def setup_ui(self):
+        self.tab_control = ttk.Notebook(self.root)
+
+        # Tab 1: Kết nối cơ sở dữ liệu
+        self.tab5 = ttk.Frame(self.tab_control)
+        self.tab_control.add(self.tab5, text="Kết Nối DB")
+
+        self.connection_frame = tk.Frame(self.tab5)
+        self.connection_frame.pack(pady=10)
+
+        tk.Label(self.connection_frame, text="DB Name:").grid(row=0, column=0, padx=5, pady=5)
+        self.entry_db_name = tk.Entry(self.connection_frame)
+        self.entry_db_name.insert(0, self.db_name)
+        self.entry_db_name.grid(row=0, column=1, padx=5, pady=5)
+
+        tk.Label(self.connection_frame, text="User:").grid(row=1, column=0, padx=5, pady=5)
+        self.entry_user = tk.Entry(self.connection_frame)
+        self.entry_user.insert(0, self.user)
+        self.entry_user.grid(row=1, column=1, padx=5, pady=5)
+
+        tk.Label(self.connection_frame, text="Password:").grid(row=2, column=0, padx=5, pady=5)
+        self.entry_password = tk.Entry(self.connection_frame, show="*")
+        self.entry_password.insert(0, self.password)
+        self.entry_password.grid(row=2, column=1, padx=5, pady=5)
+
+        tk.Label(self.connection_frame, text="Host:").grid(row=3, column=0, padx=5, pady=5)
+        self.entry_host = tk.Entry(self.connection_frame)
+        self.entry_host.insert(0, self.host)
+        self.entry_host.grid(row=3, column=1, padx=5, pady=5)
+
+        tk.Label(self.connection_frame, text="Port:").grid(row=4, column=0, padx=5, pady=5)
+        self.entry_port = tk.Entry(self.connection_frame)
+        self.entry_port.insert(0, self.port)
+        self.entry_port.grid(row=4, column=1, padx=5, pady=5)
+
+        tk.Button(self.connection_frame, text="Connect", command=self.change_db_connection).grid(row=5, columnspan=2, pady=10)
+        
+        # Tab 2: Nhập thông tin khách hàng
+        self.tab1 = ttk.Frame(self.tab_control)
+        self.tab_control.add(self.tab1, text="Đặt Sân")
+
+        self.customer_name_label = tk.Label(self.tab1, text="Tên Khách Hàng:")
+        self.customer_name_label.grid(row=0, column=0, padx=10, pady=10)
+        self.customer_name_entry = tk.Entry(self.tab1)
+        self.customer_name_entry.grid(row=0, column=1, padx=10, pady=10)
+
+        self.field_number_label = tk.Label(self.tab1, text="Số Sân:")
+        self.field_number_label.grid(row=1, column=0, padx=10, pady=10)
+        self.field_number_entry = tk.Entry(self.tab1)
+        self.field_number_entry.grid(row=1, column=1, padx=10, pady=10)
+
+        self.amount_label = tk.Label(self.tab1, text="Số Tiền:")
+        self.amount_label.grid(row=2, column=0, padx=10, pady=10)
+        self.amount_entry = tk.Entry(self.tab1)
+        self.amount_entry.grid(row=2, column=1, padx=10, pady=10)
+
+        self.add_booking_button = tk.Button(self.tab1, text="Thêm", command=self.add_booking)
+        self.add_booking_button.grid(row=3, column=0, columnspan=2, padx=10, pady=10)
+
+        # Tab 3: Hiển thị tổng số tiền và số sân đã đặt
+        self.tab2 = ttk.Frame(self.tab_control)
+        self.tab_control.add(self.tab2, text="Thống Kê")
+
+        self.total_amount_label = tk.Label(self.tab2, text="Tổng Số Tiền Thu Được:")
+        self.total_amount_label.grid(row=0, column=0, padx=10, pady=10)
+        self.total_amount_value = tk.Label(self.tab2, text="0")
+        self.total_amount_value.grid(row=0, column=1, padx=10, pady=10)
+
+        self.total_fields_label = tk.Label(self.tab2, text="Tổng Số Sân Đã Đặt:")
+        self.total_fields_label.grid(row=1, column=0, padx=10, pady=10)
+        self.total_fields_value = tk.Label(self.tab2, text="0")
+        self.total_fields_value.grid(row=1, column=1, padx=10, pady=10)
+
+        self.details_label = tk.Label(self.tab2, text="Chi Tiết Khách Hàng:")
+        self.details_label.grid(row=2, column=0, padx=10, pady=10)
+        self.details_listbox = tk.Listbox(self.tab2, width=50)
+        self.details_listbox.grid(row=3, column=0, columnspan=2, padx=10, pady=10)
+
+        # Tab 4: Cập nhật và xóa thông tin khách hàng
+        self.tab4 = ttk.Frame(self.tab_control)
+        self.tab_control.add(self.tab4, text="Update")
+
+        self.update_search_label = tk.Label(self.tab4, text="Tìm Tên Khách Hàng:")
+        self.update_search_label.grid(row=0, column=0, padx=10, pady=10)
+        self.update_search_entry = tk.Entry(self.tab4)
+        self.update_search_entry.grid(row=0, column=1, padx=10, pady=10)
+
+        self.update_search_button = tk.Button(self.tab4, text="Tìm Kiếm", command=self.populate_update_form)
+        self.update_search_button.grid(row=0, column=2, padx=10, pady=10)
+
+        self.update_customer_name_label = tk.Label(self.tab4, text="Tên Khách Hàng:")
+        self.update_customer_name_label.grid(row=1, column=0, padx=10, pady=10)
+        self.update_customer_name_entry = tk.Entry(self.tab4)
+        self.update_customer_name_entry.grid(row=1, column=1, padx=10, pady=10)
+
+        self.update_field_number_label = tk.Label(self.tab4, text="Số Sân:")
+        self.update_field_number_label.grid(row=2, column=0, padx=10, pady=10)
+        self.update_field_number_entry = tk.Entry(self.tab4)
+        self.update_field_number_entry.grid(row=2, column=1, padx=10, pady=10)
+
+        self.update_amount_label = tk.Label(self.tab4, text="Số Tiền:")
+        self.update_amount_label.grid(row=3, column=0, padx=10, pady=10)
+        self.update_amount_entry = tk.Entry(self.tab4)
+        self.update_amount_entry.grid(row=3, column=1, padx=10, pady=10)
+
+        self.update_button = tk.Button(self.tab4, text="Cập Nhật", command=self.update_customer)
+        self.update_button.grid(row=4, column=0, columnspan=2, padx=10, pady=10)
+
+        self.delete_button = tk.Button(self.tab4, text="Xóa", command=self.delete_customer)
+        self.delete_button.grid(row=5, column=0, columnspan=2, padx=10, pady=10)
+
+        self.tab_control.pack(expand=1, fill="both")
+
+    def update_statistics(self):
+        if self.cursor is None:
+            return
+
+        self.cursor.execute("SELECT COUNT(*), SUM(amount) FROM bookings")
+        result = self.cursor.fetchone()
+        total_bookings = result[0] if result[0] is not None else 0
+        total_amount = result[1] if result[1] is not None else 0
+
+        self.total_amount_value.config(text=str(total_amount))
+        self.total_fields_value.config(text=str(total_bookings))
+
+        self.cursor.execute("SELECT customer_name, field_number, amount FROM bookings")
+        self.details_listbox.delete(0, tk.END)
+        for row in self.cursor.fetchall():
+            self.details_listbox.insert(tk.END, f"Tên: {row[0]}, Số Sân: {row[1]}, Số Tiền: {row[2]}")
+
+    def add_booking(self):
+        customer_name = self.customer_name_entry.get()
+        field_number = self.field_number_entry.get()
+        amount = self.amount_entry.get()
+
+        if not customer_name or not field_number or not amount:
+            messagebox.showerror("Error", "Vui lòng nhập đầy đủ thông tin!")
+            return
+
+        try:
+            self.cursor.execute(
+                "INSERT INTO bookings (customer_name, field_number, amount) VALUES (%s, %s, %s)",
+                (customer_name, field_number, amount)
+            )
+            self.db_connection.commit()
+            messagebox.showinfo("Success", "Đặt sân thành công!")
+            self.update_statistics()
+            self.clear_booking_form()
+        except Exception as e:
+            messagebox.showerror("Error", f"Lỗi khi thêm đơn đặt sân: {e}")
+
+    def clear_booking_form(self):
+        self.customer_name_entry.delete(0, tk.END)
+        self.field_number_entry.delete(0, tk.END)
+        self.amount_entry.delete(0, tk.END)
+
+    def populate_update_form(self):
+        search_name = self.update_search_entry.get()
+        if not search_name:
+            messagebox.showerror("Error", "Vui lòng nhập tên khách hàng để tìm kiếm!")
+            return
+
+        self.cursor.execute("SELECT customer_name, field_number, amount FROM bookings WHERE customer_name = %s", (search_name,))
+        result = self.cursor.fetchone()
+        if result:
+            self.update_customer_name_entry.delete(0, tk.END)
+            self.update_customer_name_entry.insert(0, result[0])
+            self.update_field_number_entry.delete(0, tk.END)
+            self.update_field_number_entry.insert(0, result[1])
+            self.update_amount_entry.delete(0, tk.END)
+            self.update_amount_entry.insert(0, result[2])
+        else:
+            messagebox.showerror("Error", "Không tìm thấy khách hàng!")
+
+    def update_customer(self):
+        search_name = self.update_search_entry.get()
+        new_name = self.update_customer_name_entry.get()
+        new_field_number = self.update_field_number_entry.get()
+        new_amount = self.update_amount_entry.get()
+
+        if not search_name or not new_name or not new_field_number or not new_amount:
+            messagebox.showerror("Error", "Vui lòng nhập đầy đủ thông tin!")
+            return
+
+        try:
+            self.cursor.execute(
+                "UPDATE bookings SET customer_name = %s, field_number = %s, amount = %s WHERE customer_name = %s",
+                (new_name, new_field_number, new_amount, search_name)
+            )
+            self.db_connection.commit()
+            messagebox.showinfo("Success", "Cập nhật thông tin thành công!")
+            self.update_statistics()
+            self.clear_update_form()
+        except Exception as e:
+            messagebox.showerror("Error", f"Lỗi khi cập nhật thông tin: {e}")
+
+    def clear_update_form(self):
+        self.update_search_entry.delete(0, tk.END)
+        self.update_customer_name_entry.delete(0, tk.END)
+        self.update_field_number_entry.delete(0, tk.END)
+        self.update_amount_entry.delete(0, tk.END)
+
+    def delete_customer(self):
+        search_name = self.update_search_entry.get()
+        if not search_name:
+            messagebox.showerror("Error", "Vui lòng nhập tên khách hàng để xóa!")
+            return
+
+        try:
+            self.cursor.execute("DELETE FROM bookings WHERE customer_name = %s", (search_name,))
+            self.db_connection.commit()
+            messagebox.showinfo("Success", "Xóa khách hàng thành công!")
+            self.update_statistics()
+            self.clear_update_form()
+        except Exception as e:
+            messagebox.showerror("Error", f"Lỗi khi xóa khách hàng: {e}")
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = Quanlysanbong(root)
+    root.mainloop()
